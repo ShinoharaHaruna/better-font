@@ -83,6 +83,21 @@ const DEFAULT_CONFIG: FontConfig = {
   ],
 };
 
+function normalizeCodeSelectors(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    if (typeof value === "string") {
+      return value
+        .split(/\n|,/)
+        .map((item) => item.trim())
+        .filter(Boolean);
+    }
+    return [...DEFAULT_CONFIG.codeSelectors];
+  }
+  return value
+    .map((item) => (typeof item === "string" ? item.trim() : ""))
+    .filter((item) => item.length > 0);
+}
+
 function createDefaultSettings(): StoredSettings {
   return {
     global: { ...DEFAULT_CONFIG },
@@ -104,21 +119,6 @@ function normalizeFontConfig(
     typeof value === "string" && value.trim().length > 0
       ? value.trim()
       : fallback;
-
-  const normalizeSelectors = (value: unknown): string[] => {
-    if (!Array.isArray(value)) {
-      if (typeof value === "string") {
-        return value
-          .split(/\n|,/)
-          .map((item) => item.trim())
-          .filter(Boolean);
-      }
-      return [...DEFAULT_CONFIG.codeSelectors];
-    }
-    return value
-      .map((item) => (typeof item === "string" ? item.trim() : ""))
-      .filter((item) => item.length > 0);
-  };
 
   return {
     fontFamily: pickString(raw?.fontFamily, DEFAULT_CONFIG.fontFamily),
@@ -142,7 +142,7 @@ function normalizeFontConfig(
       raw?.codeFontWeight,
       DEFAULT_CONFIG.codeFontWeight
     ),
-    codeSelectors: normalizeSelectors(raw?.codeSelectors),
+    codeSelectors: normalizeCodeSelectors(raw?.codeSelectors),
   };
 }
 
@@ -178,6 +178,10 @@ function normalizeSiteRule(input: unknown): SiteRule | null {
   assign("smoothScroll", data.smoothScroll);
   assign("codeFontFamily", data.codeFontFamily);
   assign("codeFontWeight", data.codeFontWeight);
+
+  if (data.codeSelectors !== undefined && data.codeSelectors !== null) {
+    overrides.codeSelectors = normalizeCodeSelectors(data.codeSelectors);
+  }
 
   return normalized;
 }
@@ -236,6 +240,10 @@ function mergeFontConfig(
   assign("codeFontFamily");
   assign("codeFontWeight");
 
+  if (override.codeSelectors !== undefined && override.codeSelectors !== null) {
+    next.codeSelectors = normalizeCodeSelectors(override.codeSelectors);
+  }
+
   if (override.shadowRadius !== undefined && override.shadowRadius !== null) {
     const num = Number(override.shadowRadius);
     if (Number.isFinite(num)) {
@@ -252,10 +260,17 @@ function globToRegExp(pattern: string): RegExp {
   return new RegExp(regex);
 }
 
+const globRegExpCache = new Map<string, RegExp>();
+
 function matchPattern(url: string, pattern: string): boolean {
   if (!pattern) return false;
   try {
-    return globToRegExp(pattern).test(url);
+    let re = globRegExpCache.get(pattern);
+    if (!re) {
+      re = globToRegExp(pattern);
+      globRegExpCache.set(pattern, re);
+    }
+    return re.test(url);
   } catch {
     return false;
   }
@@ -295,14 +310,6 @@ ${codeSelectorList}{
 }
 
 let injectedStyle: Maybe<HTMLStyleElement>;
-let smoothScrollScript: Maybe<HTMLScriptElement>;
-const smoothScrollPayload = (() => {
-  try {
-    return GM_getResourceText("smoothscroll");
-  } catch {
-    return "";
-  }
-})();
 
 function withHead(cb: () => void): void {
   if (document.head) cb();
@@ -334,9 +341,17 @@ function ensureStyleAttached(cssText: string | null): void {
 }
 
 function keepStyleAlive(getCssText: () => string | null): void {
+  let scheduled = false;
+
+  const sync = () => {
+    scheduled = false;
+    ensureStyleAttached(getCssText());
+  };
+
   const observer = new MutationObserver(() => {
-    const cssText = getCssText();
-    ensureStyleAttached(cssText);
+    if (scheduled) return;
+    scheduled = true;
+    requestAnimationFrame(sync);
   });
 
   const observe = () => {
@@ -346,28 +361,6 @@ function keepStyleAlive(getCssText: () => string | null): void {
 
   if (document.head) observe();
   else document.addEventListener("DOMContentLoaded", observe, { once: true });
-}
-
-function ensureSmoothScroll(enabled: boolean): void {
-  if (!smoothScrollPayload) return;
-  if (enabled) {
-    if (smoothScrollScript && smoothScrollScript.isConnected) return;
-    withHead(() => {
-      if (smoothScrollScript && smoothScrollScript.isConnected) return;
-      smoothScrollScript = document.createElement("script");
-      smoothScrollScript.type = "text/javascript";
-      smoothScrollScript.textContent = smoothScrollPayload;
-      document.head?.appendChild(smoothScrollScript);
-      debugLog("SmoothScroll injected.");
-    });
-    return;
-  }
-
-  if (smoothScrollScript && smoothScrollScript.parentNode) {
-    smoothScrollScript.remove();
-    smoothScrollScript = null;
-    debugLog("SmoothScroll removed.");
-  }
 }
 
 type DeriveResult = {
@@ -598,7 +591,7 @@ function mountSettingsUi(
         siteRules: parsedRules,
       };
 
-      setState(next);
+      setState(normalizeSettings(next));
       close();
     }
   });
@@ -616,7 +609,6 @@ function mountSettingsUi(
 
   const derive = () => {
     const result = deriveStyles(settingsRef.current, window.location.href);
-    ensureSmoothScroll(Boolean(result.effectiveConfig?.smoothScroll));
     return result.cssText;
   };
 
