@@ -5,6 +5,12 @@ declare const GM_setValue: <T>(key: string, value: T) => void;
 declare const GM_addStyle: (css: string) => HTMLStyleElement;
 declare const GM_registerMenuCommand: (name: string, fn: () => void) => void;
 
+const DEBUG = false;
+const debugLog = (...args: unknown[]) => {
+  if (!DEBUG) return;
+  console.log("[BetterFont]", ...args);
+};
+
 type FontConfig = {
   fontFamily: string;
   fontWeight: string;
@@ -22,6 +28,13 @@ type StoredSettings = {
   global: FontConfig;
   siteRules: SiteRule[];
   whitelist: string[];
+};
+
+type DebugContext = {
+  url: string;
+  whitelistHit: boolean;
+  whitelistPattern: string | null;
+  matchedPattern: string | null;
 };
 
 const STORAGE_KEY = "better_font_state_v2";
@@ -47,6 +60,25 @@ const DEFAULT_CONFIG: FontConfig = {
     ".react-code-line-contents-no-virtualization",
     ".react-code-text *",
     ".react-code-line-contents-no-virtualization *",
+    ".blob-code",
+    ".blob-code-inner",
+    ".blob-code-inner *",
+    ".blob-wrapper code",
+    ".blob-wrapper code *",
+    ".gist .blob-code",
+    ".gist .blob-code *",
+    ".gist .blob-code-inner",
+    ".gist .blob-code-inner *",
+    ".gist .blob-num",
+    ".gist .blob-num *",
+    ".gist .highlight",
+    ".gist .highlight *",
+    ".js-file-line",
+    ".js-file-line *",
+    ".highlight .blob-code",
+    ".highlight .blob-code *",
+    ".highlight td",
+    ".highlight td *",
   ],
 };
 
@@ -238,16 +270,23 @@ function buildCss(cfg: FontConfig): string {
     ? "html{scroll-behavior:smooth !important;}"
     : "";
 
+  const codeSelectorList =
+    cfg.codeSelectors && cfg.codeSelectors.length > 0
+      ? cfg.codeSelectors.join(",\n")
+      : DEFAULT_CONFIG.codeSelectors.join(",\n");
+  const generalFontSelector =
+    ":where(:not([class*='icon']):not(.fa):not(.fas):not(i))";
+
   return `
 ${smooth}
-*:not([class*='icon']):not(.fa):not(.fas):not(i){
+${generalFontSelector}{
   font-family:${cfg.fontFamily} !important;
 }
-code, pre, pre code{
+${codeSelectorList}{
   font-family:${cfg.codeFontFamily} !important;
   font-weight:${cfg.codeFontWeight} !important;
 }
-*{
+:where(*) {
   font-weight:${cfg.fontWeight} !important;
   ${shadow}
 }
@@ -261,17 +300,23 @@ function ensureStyleAttached(cssText: string | null): void {
     if (injectedStyle && injectedStyle.parentNode) {
       injectedStyle.remove();
       injectedStyle = null;
+      debugLog("Styles removed (whitelisted or empty).");
     }
     return;
   }
 
   if (injectedStyle && document.head && document.head.contains(injectedStyle)) {
-    if (injectedStyle.textContent !== cssText)
+    if (injectedStyle.textContent !== cssText) {
       injectedStyle.textContent = cssText;
+      debugLog("Styles updated (existing tag reused).", {
+        length: cssText.length,
+      });
+    }
     return;
   }
 
   injectedStyle = GM_addStyle(cssText);
+  debugLog("Styles injected (new tag).", { length: cssText.length });
 }
 
 function keepStyleAlive(getCssText: () => string | null): void {
@@ -290,19 +335,38 @@ function keepStyleAlive(getCssText: () => string | null): void {
 }
 
 function deriveCss(settings: StoredSettings, url: string): string | null {
-  const whitelistHit = settings.whitelist.some((pattern) =>
+  const whitelistEntry = settings.whitelist.find((pattern) =>
     matchPattern(url, pattern)
   );
-  if (whitelistHit) return null;
-
+  const whitelistHit = Boolean(whitelistEntry);
   const matchedRule = settings.siteRules.find((rule) =>
     matchPattern(url, rule.pattern)
   );
+
+  const ctx: DebugContext = {
+    url,
+    whitelistHit,
+    whitelistPattern: whitelistEntry ?? null,
+    matchedPattern: matchedRule?.pattern ?? null,
+  };
+
+  if (whitelistHit) {
+    debugLog("Whitelist hit, skipping styles.", ctx);
+    return null;
+  }
+
   const effectiveConfig = matchedRule
     ? mergeFontConfig(settings.global, matchedRule)
     : settings.global;
 
-  return buildCss(effectiveConfig);
+  const css = buildCss(effectiveConfig);
+  debugLog("Styles derived.", {
+    ...ctx,
+    usingRule: matchedRule ? "siteRule" : "global",
+    codeSelectorsCount: effectiveConfig.codeSelectors.length,
+    cssLength: css.length,
+  });
+  return css;
 }
 
 function mountSettingsUi(

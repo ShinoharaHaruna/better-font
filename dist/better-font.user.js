@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Better Font Renderer
 // @namespace    https://github.com/ShinoharaHaruna/better-font
-// @version      0.2.0
+// @version      0.1.1
 // @description  Force consistent fonts & code styling with per-site overrides
 // @author       Shinohara Haruna
 // @match        *://*/*
@@ -14,6 +14,9 @@
 
 (function() {
   "use strict";
+  const debugLog = (...args) => {
+    return;
+  };
   const STORAGE_KEY = "better_font_state_v2";
   const DEFAULT_CONFIG = {
     fontFamily: "'PingFang SC','Heiti SC','Microsoft YaHei','Source Han Sans SC','Noto Sans CJK SC','sans-serif'",
@@ -34,7 +37,26 @@
       ".react-code-text",
       ".react-code-line-contents-no-virtualization",
       ".react-code-text *",
-      ".react-code-line-contents-no-virtualization *"
+      ".react-code-line-contents-no-virtualization *",
+      ".blob-code",
+      ".blob-code-inner",
+      ".blob-code-inner *",
+      ".blob-wrapper code",
+      ".blob-wrapper code *",
+      ".gist .blob-code",
+      ".gist .blob-code *",
+      ".gist .blob-code-inner",
+      ".gist .blob-code-inner *",
+      ".gist .blob-num",
+      ".gist .blob-num *",
+      ".gist .highlight",
+      ".gist .highlight *",
+      ".js-file-line",
+      ".js-file-line *",
+      ".highlight .blob-code",
+      ".highlight .blob-code *",
+      ".highlight td",
+      ".highlight td *"
     ]
   };
   function createDefaultSettings() {
@@ -170,16 +192,18 @@
   function buildCss(cfg) {
     const shadow = cfg.shadowRadius <= 0 ? "" : `text-shadow: 1px 1px ${cfg.shadowRadius}px ${cfg.shadowColor} !important;`;
     const smooth = cfg.smoothScroll ? "html{scroll-behavior:smooth !important;}" : "";
+    const codeSelectorList = cfg.codeSelectors && cfg.codeSelectors.length > 0 ? cfg.codeSelectors.join(",\n") : DEFAULT_CONFIG.codeSelectors.join(",\n");
+    const generalFontSelector = ":where(:not([class*='icon']):not(.fa):not(.fas):not(i))";
     return `
 ${smooth}
-*:not([class*='icon']):not(.fa):not(.fas):not(i){
+${generalFontSelector}{
   font-family:${cfg.fontFamily} !important;
 }
-code, pre, pre code{
+${codeSelectorList}{
   font-family:${cfg.codeFontFamily} !important;
   font-weight:${cfg.codeFontWeight} !important;
 }
-*{
+:where(*) {
   font-weight:${cfg.fontWeight} !important;
   ${shadow}
 }
@@ -195,11 +219,16 @@ code, pre, pre code{
       return;
     }
     if (injectedStyle && document.head && document.head.contains(injectedStyle)) {
-      if (injectedStyle.textContent !== cssText)
+      if (injectedStyle.textContent !== cssText) {
         injectedStyle.textContent = cssText;
+        debugLog("Styles updated (existing tag reused).", {
+          length: cssText.length
+        });
+      }
       return;
     }
     injectedStyle = GM_addStyle(cssText);
+    debugLog("Styles injected (new tag).", { length: cssText.length });
   }
   function keepStyleAlive(getCssText) {
     const observer = new MutationObserver(() => {
@@ -214,15 +243,31 @@ code, pre, pre code{
     else document.addEventListener("DOMContentLoaded", observe, { once: true });
   }
   function deriveCss(settings, url) {
-    const whitelistHit = settings.whitelist.some(
+    const whitelistEntry = settings.whitelist.find(
       (pattern) => matchPattern(url, pattern)
     );
-    if (whitelistHit) return null;
+    const whitelistHit = Boolean(whitelistEntry);
     const matchedRule = settings.siteRules.find(
       (rule) => matchPattern(url, rule.pattern)
     );
+    const ctx = {
+      url,
+      whitelistHit,
+      whitelistPattern: whitelistEntry ?? null,
+      matchedPattern: matchedRule?.pattern ?? null
+    };
+    if (whitelistHit) {
+      return null;
+    }
     const effectiveConfig = matchedRule ? mergeFontConfig(settings.global, matchedRule) : settings.global;
-    return buildCss(effectiveConfig);
+    const css = buildCss(effectiveConfig);
+    debugLog("Styles derived.", {
+      ...ctx,
+      usingRule: matchedRule ? "siteRule" : "global",
+      codeSelectorsCount: effectiveConfig.codeSelectors.length,
+      cssLength: css.length
+    });
+    return css;
   }
   function mountSettingsUi(getState, setState) {
     const existing = document.querySelector(
