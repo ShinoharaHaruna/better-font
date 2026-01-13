@@ -14,7 +14,7 @@ Better Font Renderer 是一个面向 GreasyFork/Tampermonkey 的 userscript，�
 
 ## 目录结构
 
-```
+```bash
 ├── dist/                    # 构建输出（better-font.user.js）
 ├── src/
 │   └── index.ts             # userscript 源码

@@ -210,6 +210,18 @@ ${codeSelectorList}{
 `;
   }
   let injectedStyle;
+  let smoothScrollScript;
+  const smoothScrollPayload = (() => {
+    try {
+      return GM_getResourceText("smoothscroll");
+    } catch {
+      return "";
+    }
+  })();
+  function withHead(cb) {
+    if (document.head) cb();
+    else document.addEventListener("DOMContentLoaded", cb, { once: true });
+  }
   function ensureStyleAttached(cssText) {
     if (!cssText) {
       if (injectedStyle && injectedStyle.parentNode) {
@@ -242,7 +254,25 @@ ${codeSelectorList}{
     if (document.head) observe();
     else document.addEventListener("DOMContentLoaded", observe, { once: true });
   }
-  function deriveCss(settings, url) {
+  function ensureSmoothScroll(enabled) {
+    if (!smoothScrollPayload) return;
+    if (enabled) {
+      if (smoothScrollScript && smoothScrollScript.isConnected) return;
+      withHead(() => {
+        if (smoothScrollScript && smoothScrollScript.isConnected) return;
+        smoothScrollScript = document.createElement("script");
+        smoothScrollScript.type = "text/javascript";
+        smoothScrollScript.textContent = smoothScrollPayload;
+        document.head?.appendChild(smoothScrollScript);
+      });
+      return;
+    }
+    if (smoothScrollScript && smoothScrollScript.parentNode) {
+      smoothScrollScript.remove();
+      smoothScrollScript = null;
+    }
+  }
+  function deriveStyles(settings, url) {
     const whitelistEntry = settings.whitelist.find(
       (pattern) => matchPattern(url, pattern)
     );
@@ -257,7 +287,7 @@ ${codeSelectorList}{
       matchedPattern: matchedRule?.pattern ?? null
     };
     if (whitelistHit) {
-      return null;
+      return { cssText: null, effectiveConfig: null };
     }
     const effectiveConfig = matchedRule ? mergeFontConfig(settings.global, matchedRule) : settings.global;
     const css = buildCss(effectiveConfig);
@@ -267,7 +297,7 @@ ${codeSelectorList}{
       codeSelectorsCount: effectiveConfig.codeSelectors.length,
       cssLength: css.length
     });
-    return css;
+    return { cssText: css, effectiveConfig };
   }
   function mountSettingsUi(getState, setState) {
     const existing = document.querySelector(
@@ -425,7 +455,8 @@ ${codeSelectorList}{
             shadowColor: ipColor.value.trim() || DEFAULT_CONFIG.shadowColor,
             smoothScroll: ckSmooth.checked,
             codeFontFamily: ipCodeFont.value.trim() || DEFAULT_CONFIG.codeFontFamily,
-            codeFontWeight: selCodeWeight.value
+            codeFontWeight: selCodeWeight.value,
+            codeSelectors: [...state.global.codeSelectors]
           },
           whitelist: whitelistList,
           siteRules: parsedRules
@@ -442,12 +473,16 @@ ${codeSelectorList}{
   }
   (function main() {
     const settingsRef = { current: loadSettings() };
-    const currentCss = () => deriveCss(settingsRef.current, window.location.href);
+    const derive = () => {
+      const result = deriveStyles(settingsRef.current, window.location.href);
+      ensureSmoothScroll(Boolean(result.effectiveConfig?.smoothScroll));
+      return result.cssText;
+    };
     const apply = () => {
-      ensureStyleAttached(currentCss());
+      ensureStyleAttached(derive());
     };
     apply();
-    keepStyleAlive(() => currentCss());
+    keepStyleAlive(() => derive());
     GM_registerMenuCommand("Better Font 设置", () => {
       mountSettingsUi(
         () => settingsRef.current,

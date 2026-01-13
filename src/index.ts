@@ -4,6 +4,7 @@ declare const GM_getValue: <T>(key: string, defaultValue: T) => T;
 declare const GM_setValue: <T>(key: string, value: T) => void;
 declare const GM_addStyle: (css: string) => HTMLStyleElement;
 declare const GM_registerMenuCommand: (name: string, fn: () => void) => void;
+declare const GM_getResourceText: (name: string) => string;
 
 const DEBUG = false;
 const debugLog = (...args: unknown[]) => {
@@ -294,6 +295,19 @@ ${codeSelectorList}{
 }
 
 let injectedStyle: Maybe<HTMLStyleElement>;
+let smoothScrollScript: Maybe<HTMLScriptElement>;
+const smoothScrollPayload = (() => {
+  try {
+    return GM_getResourceText("smoothscroll");
+  } catch {
+    return "";
+  }
+})();
+
+function withHead(cb: () => void): void {
+  if (document.head) cb();
+  else document.addEventListener("DOMContentLoaded", cb, { once: true });
+}
 
 function ensureStyleAttached(cssText: string | null): void {
   if (!cssText) {
@@ -334,7 +348,34 @@ function keepStyleAlive(getCssText: () => string | null): void {
   else document.addEventListener("DOMContentLoaded", observe, { once: true });
 }
 
-function deriveCss(settings: StoredSettings, url: string): string | null {
+function ensureSmoothScroll(enabled: boolean): void {
+  if (!smoothScrollPayload) return;
+  if (enabled) {
+    if (smoothScrollScript && smoothScrollScript.isConnected) return;
+    withHead(() => {
+      if (smoothScrollScript && smoothScrollScript.isConnected) return;
+      smoothScrollScript = document.createElement("script");
+      smoothScrollScript.type = "text/javascript";
+      smoothScrollScript.textContent = smoothScrollPayload;
+      document.head?.appendChild(smoothScrollScript);
+      debugLog("SmoothScroll injected.");
+    });
+    return;
+  }
+
+  if (smoothScrollScript && smoothScrollScript.parentNode) {
+    smoothScrollScript.remove();
+    smoothScrollScript = null;
+    debugLog("SmoothScroll removed.");
+  }
+}
+
+type DeriveResult = {
+  cssText: string | null;
+  effectiveConfig: FontConfig | null;
+};
+
+function deriveStyles(settings: StoredSettings, url: string): DeriveResult {
   const whitelistEntry = settings.whitelist.find((pattern) =>
     matchPattern(url, pattern)
   );
@@ -352,7 +393,7 @@ function deriveCss(settings: StoredSettings, url: string): string | null {
 
   if (whitelistHit) {
     debugLog("Whitelist hit, skipping styles.", ctx);
-    return null;
+    return { cssText: null, effectiveConfig: null };
   }
 
   const effectiveConfig = matchedRule
@@ -366,7 +407,7 @@ function deriveCss(settings: StoredSettings, url: string): string | null {
     codeSelectorsCount: effectiveConfig.codeSelectors.length,
     cssLength: css.length,
   });
-  return css;
+  return { cssText: css, effectiveConfig };
 }
 
 function mountSettingsUi(
@@ -551,6 +592,7 @@ function mountSettingsUi(
           codeFontFamily:
             ipCodeFont.value.trim() || DEFAULT_CONFIG.codeFontFamily,
           codeFontWeight: selCodeWeight.value,
+          codeSelectors: [...state.global.codeSelectors],
         },
         whitelist: whitelistList,
         siteRules: parsedRules,
@@ -572,14 +614,18 @@ function mountSettingsUi(
 (function main() {
   const settingsRef: { current: StoredSettings } = { current: loadSettings() };
 
-  const currentCss = () => deriveCss(settingsRef.current, window.location.href);
+  const derive = () => {
+    const result = deriveStyles(settingsRef.current, window.location.href);
+    ensureSmoothScroll(Boolean(result.effectiveConfig?.smoothScroll));
+    return result.cssText;
+  };
 
   const apply = () => {
-    ensureStyleAttached(currentCss());
+    ensureStyleAttached(derive());
   };
 
   apply();
-  keepStyleAlive(() => currentCss());
+  keepStyleAlive(() => derive());
 
   GM_registerMenuCommand("Better Font 设置", () => {
     mountSettingsUi(
