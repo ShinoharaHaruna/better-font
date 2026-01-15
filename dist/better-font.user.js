@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Better Font Renderer
 // @namespace    https://github.com/ShinoharaHaruna/better-font
-// @version      0.1.1
+// @version      0.2.0
 // @description  Force consistent fonts & code styling with per-site overrides
 // @author       Shinohara Haruna
 // @match        *://*/*
@@ -23,7 +23,6 @@
     fontWeight: "bold",
     shadowRadius: 3,
     shadowColor: "#c3c3c3",
-    smoothScroll: true,
     codeFontFamily: "'Fira Code','JetBrains Mono','Consolas','Menlo','monospace'",
     codeFontWeight: "400",
     codeSelectors: [
@@ -92,7 +91,6 @@
         50
       ),
       shadowColor: pickString(raw?.shadowColor, DEFAULT_CONFIG.shadowColor),
-      smoothScroll: typeof raw?.smoothScroll === "boolean" ? raw.smoothScroll : DEFAULT_CONFIG.smoothScroll,
       codeFontFamily: pickString(
         raw?.codeFontFamily,
         DEFAULT_CONFIG.codeFontFamily
@@ -119,10 +117,6 @@
           overrides[key] = Math.min(Math.max(num, 0), 50);
         return;
       }
-      if (key === "smoothScroll") {
-        overrides[key] = Boolean(value);
-        return;
-      }
       if (typeof value === "string" && value.trim().length > 0) {
         overrides[key] = value.trim();
       }
@@ -131,7 +125,6 @@
     assign("fontWeight", data.fontWeight);
     assign("shadowColor", data.shadowColor);
     assign("shadowRadius", data.shadowRadius);
-    assign("smoothScroll", data.smoothScroll);
     assign("codeFontFamily", data.codeFontFamily);
     assign("codeFontWeight", data.codeFontWeight);
     if (data.codeSelectors !== void 0 && data.codeSelectors !== null) {
@@ -168,7 +161,6 @@
     assign("fontFamily");
     assign("fontWeight");
     assign("shadowColor");
-    assign("smoothScroll");
     assign("codeFontFamily");
     assign("codeFontWeight");
     if (override.codeSelectors !== void 0 && override.codeSelectors !== null) {
@@ -203,11 +195,9 @@
   }
   function buildCss(cfg) {
     const shadow = cfg.shadowRadius <= 0 ? "" : `text-shadow: 1px 1px ${cfg.shadowRadius}px ${cfg.shadowColor} !important;`;
-    const smooth = cfg.smoothScroll ? "html{scroll-behavior:smooth !important;}" : "";
     const codeSelectorList = cfg.codeSelectors && cfg.codeSelectors.length > 0 ? cfg.codeSelectors.join(",\n") : DEFAULT_CONFIG.codeSelectors.join(",\n");
     const generalFontSelector = ":where(:not([class*='icon']):not(.fa):not(.fas):not(i))";
     return `
-${smooth}
 ${generalFontSelector}{
   font-family:${cfg.fontFamily} !important;
 }
@@ -277,7 +267,7 @@ ${codeSelectorList}{
     if (whitelistHit) {
       return { cssText: null, effectiveConfig: null };
     }
-    const effectiveConfig = matchedRule ? mergeFontConfig(settings.global, matchedRule) : settings.global;
+    const effectiveConfig = mergeFontConfig(settings.global, matchedRule);
     const css = buildCss(effectiveConfig);
     debugLog("Styles derived.", {
       ...ctx,
@@ -345,13 +335,6 @@ ${codeSelectorList}{
         <input type="text" data-k="shadowColor" placeholder="#c3c3c3" />
       </label>
       <label>
-        <div class="row">
-          <div class="grow">平滑滚动</div>
-          <input type="checkbox" data-k="smoothScroll" />
-        </div>
-        <div class="hint">切换后通过 scroll-behavior 生效</div>
-      </label>
-      <label>
         <div>代码块 font-family</div>
         <input type="text" data-k="codeFontFamily" placeholder="'Fira Code','monospace'" />
       </label>
@@ -391,7 +374,6 @@ ${codeSelectorList}{
     const rgShadow = q('input[data-k="shadowRadius"]');
     const lbShadow = q('span[data-k="shadowRadiusLabel"]');
     const ipColor = q('input[data-k="shadowColor"]');
-    const ckSmooth = q('input[data-k="smoothScroll"]');
     const ipCodeFont = q('input[data-k="codeFontFamily"]');
     const selCodeWeight = q('select[data-k="codeFontWeight"]');
     const taWhitelist = q('textarea[data-k="whitelist"]');
@@ -401,7 +383,6 @@ ${codeSelectorList}{
     rgShadow.value = String(global.shadowRadius);
     lbShadow.textContent = String(global.shadowRadius);
     ipColor.value = global.shadowColor;
-    ckSmooth.checked = global.smoothScroll;
     ipCodeFont.value = global.codeFontFamily;
     selCodeWeight.value = global.codeFontWeight;
     taWhitelist.value = whitelist.join("\n");
@@ -441,7 +422,6 @@ ${codeSelectorList}{
             fontWeight: selWeight.value,
             shadowRadius: Math.max(0, Math.min(20, Number(rgShadow.value))),
             shadowColor: ipColor.value.trim() || DEFAULT_CONFIG.shadowColor,
-            smoothScroll: ckSmooth.checked,
             codeFontFamily: ipCodeFont.value.trim() || DEFAULT_CONFIG.codeFontFamily,
             codeFontWeight: selCodeWeight.value,
             codeSelectors: [...state.global.codeSelectors]

@@ -1,10 +1,12 @@
 import { defineConfig } from "vite";
+import type { Plugin } from "vite";
+import type { OutputAsset, OutputBundle, OutputChunk } from "rollup";
 
 const userscriptBanner =
   `// ==UserScript==\n` +
   `// @name         Better Font Renderer\n` +
   `// @namespace    https://github.com/ShinoharaHaruna/better-font\n` +
-  `// @version      0.1.1\n` +
+  `// @version      0.2.0\n` +
   `// @description  Force consistent fonts & code styling with per-site overrides\n` +
   `// @author       Shinohara Haruna\n` +
   `// @match        *://*/*\n` +
@@ -15,14 +17,16 @@ const userscriptBanner =
   `// @grant        GM_registerMenuCommand\n` +
   `// ==/UserScript==\n`;
 
-const userscriptMetadataPlugin = () => ({
+const userscriptMetadataPlugin = (): Plugin => ({
   name: "userscript-metadata",
-  generateBundle(_, bundle) {
-    Object.values(bundle).forEach((output) => {
-      if (output.type !== "chunk") return;
-      if (output.code.startsWith(userscriptBanner)) return;
-      output.code = `${userscriptBanner}\n${output.code}`;
-    });
+  generateBundle(_options, bundle: OutputBundle) {
+    (Object.values(bundle) as Array<OutputAsset | OutputChunk>).forEach(
+      (output) => {
+        if (output.type !== "chunk") return;
+        if (output.code.startsWith(userscriptBanner)) return;
+        output.code = `${userscriptBanner}\n${output.code}`;
+      }
+    );
   },
 });
 

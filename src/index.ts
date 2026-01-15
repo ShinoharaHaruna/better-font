@@ -4,7 +4,6 @@ declare const GM_getValue: <T>(key: string, defaultValue: T) => T;
 declare const GM_setValue: <T>(key: string, value: T) => void;
 declare const GM_addStyle: (css: string) => HTMLStyleElement;
 declare const GM_registerMenuCommand: (name: string, fn: () => void) => void;
-declare const GM_getResourceText: (name: string) => string;
 
 const DEBUG = false;
 const debugLog = (...args: unknown[]) => {
@@ -17,7 +16,6 @@ type FontConfig = {
   fontWeight: string;
   shadowRadius: number;
   shadowColor: string;
-  smoothScroll: boolean;
   codeFontFamily: string;
   codeFontWeight: string;
   codeSelectors: string[];
@@ -46,7 +44,6 @@ const DEFAULT_CONFIG: FontConfig = {
   fontWeight: "bold",
   shadowRadius: 3,
   shadowColor: "#c3c3c3",
-  smoothScroll: true,
   codeFontFamily: "'Fira Code','JetBrains Mono','Consolas','Menlo','monospace'",
   codeFontWeight: "400",
   codeSelectors: [
@@ -130,10 +127,6 @@ function normalizeFontConfig(
       50
     ),
     shadowColor: pickString(raw?.shadowColor, DEFAULT_CONFIG.shadowColor),
-    smoothScroll:
-      typeof raw?.smoothScroll === "boolean"
-        ? raw.smoothScroll
-        : DEFAULT_CONFIG.smoothScroll,
     codeFontFamily: pickString(
       raw?.codeFontFamily,
       DEFAULT_CONFIG.codeFontFamily
@@ -162,10 +155,6 @@ function normalizeSiteRule(input: unknown): SiteRule | null {
         overrides[key] = Math.min(Math.max(num, 0), 50) as FontConfig[K];
       return;
     }
-    if (key === "smoothScroll") {
-      overrides[key] = Boolean(value) as FontConfig[K];
-      return;
-    }
     if (typeof value === "string" && value.trim().length > 0) {
       overrides[key] = value.trim() as FontConfig[K];
     }
@@ -175,7 +164,6 @@ function normalizeSiteRule(input: unknown): SiteRule | null {
   assign("fontWeight", data.fontWeight);
   assign("shadowColor", data.shadowColor);
   assign("shadowRadius", data.shadowRadius);
-  assign("smoothScroll", data.smoothScroll);
   assign("codeFontFamily", data.codeFontFamily);
   assign("codeFontWeight", data.codeFontWeight);
 
@@ -236,7 +224,6 @@ function mergeFontConfig(
   assign("fontFamily");
   assign("fontWeight");
   assign("shadowColor");
-  assign("smoothScroll");
   assign("codeFontFamily");
   assign("codeFontWeight");
 
@@ -282,10 +269,6 @@ function buildCss(cfg: FontConfig): string {
       ? ""
       : `text-shadow: 1px 1px ${cfg.shadowRadius}px ${cfg.shadowColor} !important;`;
 
-  const smooth = cfg.smoothScroll
-    ? "html{scroll-behavior:smooth !important;}"
-    : "";
-
   const codeSelectorList =
     cfg.codeSelectors && cfg.codeSelectors.length > 0
       ? cfg.codeSelectors.join(",\n")
@@ -294,7 +277,6 @@ function buildCss(cfg: FontConfig): string {
     ":where(:not([class*='icon']):not(.fa):not(.fas):not(i))";
 
   return `
-${smooth}
 ${generalFontSelector}{
   font-family:${cfg.fontFamily} !important;
 }
@@ -389,9 +371,7 @@ function deriveStyles(settings: StoredSettings, url: string): DeriveResult {
     return { cssText: null, effectiveConfig: null };
   }
 
-  const effectiveConfig = matchedRule
-    ? mergeFontConfig(settings.global, matchedRule)
-    : settings.global;
+  const effectiveConfig = mergeFontConfig(settings.global, matchedRule);
 
   const css = buildCss(effectiveConfig);
   debugLog("Styles derived.", {
@@ -468,13 +448,6 @@ function mountSettingsUi(
         <input type="text" data-k="shadowColor" placeholder="#c3c3c3" />
       </label>
       <label>
-        <div class="row">
-          <div class="grow">平滑滚动</div>
-          <input type="checkbox" data-k="smoothScroll" />
-        </div>
-        <div class="hint">切换后通过 scroll-behavior 生效</div>
-      </label>
-      <label>
         <div>代码块 font-family</div>
         <input type="text" data-k="codeFontFamily" placeholder="'Fira Code','monospace'" />
       </label>
@@ -517,7 +490,6 @@ function mountSettingsUi(
   const rgShadow = q<HTMLInputElement>('input[data-k="shadowRadius"]');
   const lbShadow = q<HTMLSpanElement>('span[data-k="shadowRadiusLabel"]');
   const ipColor = q<HTMLInputElement>('input[data-k="shadowColor"]');
-  const ckSmooth = q<HTMLInputElement>('input[data-k="smoothScroll"]');
   const ipCodeFont = q<HTMLInputElement>('input[data-k="codeFontFamily"]');
   const selCodeWeight = q<HTMLSelectElement>('select[data-k="codeFontWeight"]');
   const taWhitelist = q<HTMLTextAreaElement>('textarea[data-k="whitelist"]');
@@ -528,7 +500,6 @@ function mountSettingsUi(
   rgShadow.value = String(global.shadowRadius);
   lbShadow.textContent = String(global.shadowRadius);
   ipColor.value = global.shadowColor;
-  ckSmooth.checked = global.smoothScroll;
   ipCodeFont.value = global.codeFontFamily;
   selCodeWeight.value = global.codeFontWeight;
   taWhitelist.value = whitelist.join("\n");
@@ -581,7 +552,6 @@ function mountSettingsUi(
           fontWeight: selWeight.value,
           shadowRadius: Math.max(0, Math.min(20, Number(rgShadow.value))),
           shadowColor: ipColor.value.trim() || DEFAULT_CONFIG.shadowColor,
-          smoothScroll: ckSmooth.checked,
           codeFontFamily:
             ipCodeFont.value.trim() || DEFAULT_CONFIG.codeFontFamily,
           codeFontWeight: selCodeWeight.value,

@@ -27,6 +27,7 @@ const RAW_RUNTIME_STATE =
       [null, {\
         "packageLocation": "./",\
         "packageDependencies": [\
+          ["rollup", "npm:4.55.1"],\
           ["typescript", "patch:typescript@npm%3A5.9.3#optional!builtin<compat/typescript>::version=5.9.3&hash=5786d5"],\
           ["vite", "virtual:4e58142fdfb3e6cc71589cf38806db960339e40d0e45072c0c449c0ac5b44b35fb0922148445ef6136597655f99c0804d6847ddcdbce7003b0e11c4c8d8a4b5b#npm:5.4.21"]\
         ],\
@@ -550,6 +551,7 @@ const RAW_RUNTIME_STATE =
         "packageLocation": "./",\
         "packageDependencies": [\
           ["better-font-userscript", "workspace:."],\
+          ["rollup", "npm:4.55.1"],\
           ["typescript", "patch:typescript@npm%3A5.9.3#optional!builtin<compat/typescript>::version=5.9.3&hash=5786d5"],\
           ["vite", "virtual:4e58142fdfb3e6cc71589cf38806db960339e40d0e45072c0c449c0ac5b44b35fb0922148445ef6136597655f99c0804d6847ddcdbce7003b0e11c4c8d8a4b5b#npm:5.4.21"]\
         ],\
