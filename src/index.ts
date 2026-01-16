@@ -274,10 +274,22 @@ function buildCss(cfg: FontConfig): string {
       ? ""
       : `text-shadow: 1px 1px ${cfg.shadowRadius}px ${cfg.shadowColor} !important;`;
 
-  const codeSelectorList =
+  const rawCodeSelectors =
     cfg.codeSelectors && cfg.codeSelectors.length > 0
-      ? cfg.codeSelectors.join(",\n")
-      : DEFAULT_CONFIG.codeSelectors.join(",\n");
+      ? cfg.codeSelectors
+      : DEFAULT_CONFIG.codeSelectors;
+
+  const expandedCodeSelectors = Array.from(
+    rawCodeSelectors.reduce((acc, selector) => {
+      const sel = selector.trim();
+      if (!sel) return acc;
+      acc.add(sel);
+      if (!sel.includes("*")) {
+        acc.add(`${sel} *`);
+      }
+      return acc;
+    }, new Set<string>())
+  ).join(",\n");
   const generalFontSelector =
     ":where(:not([class*='icon']):not(.fa):not(.fas):not(i))";
 
@@ -285,7 +297,7 @@ function buildCss(cfg: FontConfig): string {
 ${generalFontSelector}{
   font-family:${cfg.fontFamily} !important;
 }
-${codeSelectorList}{
+${expandedCodeSelectors}{
   font-family:${cfg.codeFontFamily} !important;
   font-weight:${cfg.codeFontWeight} !important;
 }
