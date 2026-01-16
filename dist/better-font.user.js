@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Better Font Renderer
 // @namespace    https://github.com/ShinoharaHaruna/better-font
-// @version      0.2.0
+// @version      0.2.1
 // @description  Force consistent fonts & code styling with per-site overrides
 // @author       Shinohara Haruna
 // @match        *://*/*
@@ -29,10 +29,15 @@
       "code",
       "pre",
       "pre code",
+      "pre *",
       "kbd",
       "samp",
       "tt",
       ".hljs",
+      ".markdown-body pre",
+      ".markdown-body pre *",
+      ".markdown-body .highlight",
+      ".markdown-body .highlight *",
       ".react-code-text",
       ".react-code-line-contents-no-virtualization",
       ".react-code-text *",
