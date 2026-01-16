@@ -111,26 +111,21 @@ function createDefaultSettings(): StoredSettings {
 function normalizeFontConfig(
   raw: Partial<FontConfig> | null | undefined
 ): FontConfig {
-  const safeNumber = (value: unknown, fallback: number, min = 0, max = 100) => {
-    const num = typeof value === "number" ? value : Number(value);
-    if (!Number.isFinite(num)) return fallback;
-    return Math.min(Math.max(num, min), max);
-  };
-
-  const pickString = (value: unknown, fallback: string) =>
+  const pickString = (value: unknown, fallback: string): string =>
     typeof value === "string" && value.trim().length > 0
       ? value.trim()
       : fallback;
 
+  const clampNumber = (value: unknown, fallback: number): number => {
+    const num = typeof value === "number" ? value : Number(value);
+    if (!Number.isFinite(num)) return fallback;
+    return Math.min(Math.max(num, 0), 50);
+  };
+
   return {
     fontFamily: pickString(raw?.fontFamily, DEFAULT_CONFIG.fontFamily),
     fontWeight: pickString(raw?.fontWeight, DEFAULT_CONFIG.fontWeight),
-    shadowRadius: safeNumber(
-      raw?.shadowRadius,
-      DEFAULT_CONFIG.shadowRadius,
-      0,
-      50
-    ),
+    shadowRadius: clampNumber(raw?.shadowRadius, DEFAULT_CONFIG.shadowRadius),
     shadowColor: pickString(raw?.shadowColor, DEFAULT_CONFIG.shadowColor),
     codeFontFamily: pickString(
       raw?.codeFontFamily,
@@ -150,33 +145,36 @@ function normalizeSiteRule(input: unknown): SiteRule | null {
   const pattern = typeof data.pattern === "string" ? data.pattern.trim() : "";
   if (!pattern) return null;
 
-  const normalized: SiteRule = { pattern };
-  const overrides = normalized as Partial<FontConfig>;
-  const assign = <K extends keyof FontConfig>(key: K, value: unknown) => {
-    if (value === undefined || value === null) return;
-    if (key === "shadowRadius") {
-      const num = Number(value);
-      if (Number.isFinite(num))
-        overrides[key] = Math.min(Math.max(num, 0), 50) as FontConfig[K];
-      return;
-    }
-    if (typeof value === "string" && value.trim().length > 0) {
-      overrides[key] = value.trim() as FontConfig[K];
-    }
+  const overrides: Partial<FontConfig> = {};
+
+  const pickString = (value: unknown): string | undefined => {
+    const trimmed = typeof value === "string" ? value.trim() : "";
+    return trimmed.length > 0 ? trimmed : undefined;
   };
 
-  assign("fontFamily", data.fontFamily);
-  assign("fontWeight", data.fontWeight);
-  assign("shadowColor", data.shadowColor);
-  assign("shadowRadius", data.shadowRadius);
-  assign("codeFontFamily", data.codeFontFamily);
-  assign("codeFontWeight", data.codeFontWeight);
+  const fontFamily = pickString(data.fontFamily);
+  if (fontFamily) overrides.fontFamily = fontFamily;
+  const fontWeight = pickString(data.fontWeight);
+  if (fontWeight) overrides.fontWeight = fontWeight;
+  const shadowColor = pickString(data.shadowColor);
+  if (shadowColor) overrides.shadowColor = shadowColor;
+  const codeFontFamily = pickString(data.codeFontFamily);
+  if (codeFontFamily) overrides.codeFontFamily = codeFontFamily;
+  const codeFontWeight = pickString(data.codeFontWeight);
+  if (codeFontWeight) overrides.codeFontWeight = codeFontWeight;
+
+  if (data.shadowRadius !== undefined && data.shadowRadius !== null) {
+    const num = Number(data.shadowRadius);
+    if (Number.isFinite(num)) {
+      overrides.shadowRadius = Math.min(Math.max(num, 0), 50);
+    }
+  }
 
   if (data.codeSelectors !== undefined && data.codeSelectors !== null) {
     overrides.codeSelectors = normalizeCodeSelectors(data.codeSelectors);
   }
 
-  return normalized;
+  return { pattern, ...overrides };
 }
 
 function normalizeSettings(input: StoredSettings | null): StoredSettings {
@@ -216,31 +214,27 @@ function mergeFontConfig(
   override?: Partial<FontConfig>
 ): FontConfig {
   if (!override) return { ...base };
-  const next: FontConfig = { ...base };
 
-  const assign = <K extends Exclude<keyof FontConfig, "shadowRadius">>(
-    key: K
-  ) => {
-    const value = override[key];
-    if (value === undefined || value === null) return;
-    next[key] = value as FontConfig[K];
+  const clampNumber = (value: unknown, fallback: number): number => {
+    const num = typeof value === "number" ? value : Number(value);
+    if (!Number.isFinite(num)) return fallback;
+    return Math.min(Math.max(num, 0), 50);
   };
 
-  assign("fontFamily");
-  assign("fontWeight");
-  assign("shadowColor");
-  assign("codeFontFamily");
-  assign("codeFontWeight");
+  const next: FontConfig = { ...base };
 
-  if (override.codeSelectors !== undefined && override.codeSelectors !== null) {
+  if (override.fontFamily != null) next.fontFamily = override.fontFamily;
+  if (override.fontWeight != null) next.fontWeight = override.fontWeight;
+  if (override.shadowColor != null) next.shadowColor = override.shadowColor;
+  if (override.codeFontFamily != null)
+    next.codeFontFamily = override.codeFontFamily;
+  if (override.codeFontWeight != null)
+    next.codeFontWeight = override.codeFontWeight;
+  if (override.codeSelectors != null) {
     next.codeSelectors = normalizeCodeSelectors(override.codeSelectors);
   }
-
-  if (override.shadowRadius !== undefined && override.shadowRadius !== null) {
-    const num = Number(override.shadowRadius);
-    if (Number.isFinite(num)) {
-      next.shadowRadius = Math.min(Math.max(num, 0), 50);
-    }
+  if (override.shadowRadius != null) {
+    next.shadowRadius = clampNumber(override.shadowRadius, next.shadowRadius);
   }
 
   return next;
@@ -268,6 +262,21 @@ function matchPattern(url: string, pattern: string): boolean {
   }
 }
 
+function expandCodeSelectors(selectors: string[]): string[] {
+  const result = new Set<string>();
+
+  for (const selector of selectors) {
+    const trimmed = selector.trim();
+    if (!trimmed) continue;
+    result.add(trimmed);
+    if (!trimmed.includes("*")) {
+      result.add(`${trimmed} *`);
+    }
+  }
+
+  return Array.from(result);
+}
+
 function buildCss(cfg: FontConfig): string {
   const shadow =
     cfg.shadowRadius <= 0
@@ -279,17 +288,8 @@ function buildCss(cfg: FontConfig): string {
       ? cfg.codeSelectors
       : DEFAULT_CONFIG.codeSelectors;
 
-  const expandedCodeSelectors = Array.from(
-    rawCodeSelectors.reduce((acc, selector) => {
-      const sel = selector.trim();
-      if (!sel) return acc;
-      acc.add(sel);
-      if (!sel.includes("*")) {
-        acc.add(`${sel} *`);
-      }
-      return acc;
-    }, new Set<string>())
-  ).join(",\n");
+  const expandedCodeSelectors =
+    expandCodeSelectors(rawCodeSelectors).join(",\n");
   const generalFontSelector =
     ":where(:not([class*='icon']):not(.fa):not(.fas):not(i))";
 
@@ -532,6 +532,27 @@ function mountSettingsUi(
     style.remove();
   };
 
+  function parseSiteRules(input: string): SiteRule[] | null {
+    if (!input.trim()) return [];
+    try {
+      const parsed = JSON.parse(input);
+      if (!Array.isArray(parsed)) throw new Error("rules must be an array");
+      return parsed
+        .map((item) => normalizeSiteRule(item))
+        .filter((item): item is SiteRule => item !== null);
+    } catch {
+      window.alert("站点优先配置 JSON 无法解析，请检查格式。");
+      return null;
+    }
+  }
+
+  function parseWhitelist(input: string): string[] {
+    return input
+      .split(/\n+/)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+  }
+
   root.addEventListener("click", (e) => {
     const target = e.target as HTMLElement;
     const act = target.getAttribute("data-act");
@@ -543,25 +564,10 @@ function mountSettingsUi(
     }
 
     if (act === "save") {
-      let parsedRules: SiteRule[] = [];
-      const rulesInput = taSiteRules.value.trim();
-      if (rulesInput) {
-        try {
-          const parsed = JSON.parse(rulesInput);
-          if (!Array.isArray(parsed)) throw new Error("rules must be an array");
-          parsedRules = parsed
-            .map((item) => normalizeSiteRule(item))
-            .filter((item): item is SiteRule => Boolean(item));
-        } catch (error) {
-          window.alert("站点优先配置 JSON 无法解析，请检查格式。");
-          return;
-        }
-      }
+      const parsedRules = parseSiteRules(taSiteRules.value);
+      if (parsedRules === null) return;
 
-      const whitelistList = taWhitelist.value
-        .split(/\n+/)
-        .map((line) => line.trim())
-        .filter((line) => line.length > 0);
+      const whitelistList = parseWhitelist(taWhitelist.value);
 
       const next: StoredSettings = {
         global: {

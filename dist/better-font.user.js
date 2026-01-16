@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Better Font Renderer
 // @namespace    https://github.com/ShinoharaHaruna/better-font
-// @version      0.2.1
+// @version      0.2.2
 // @description  Force consistent fonts & code styling with per-site overrides
 // @author       Shinohara Haruna
 // @match        *://*/*
@@ -80,21 +80,16 @@
     };
   }
   function normalizeFontConfig(raw) {
-    const safeNumber = (value, fallback, min = 0, max = 100) => {
+    const pickString = (value, fallback) => typeof value === "string" && value.trim().length > 0 ? value.trim() : fallback;
+    const clampNumber = (value, fallback) => {
       const num = typeof value === "number" ? value : Number(value);
       if (!Number.isFinite(num)) return fallback;
-      return Math.min(Math.max(num, min), max);
+      return Math.min(Math.max(num, 0), 50);
     };
-    const pickString = (value, fallback) => typeof value === "string" && value.trim().length > 0 ? value.trim() : fallback;
     return {
       fontFamily: pickString(raw?.fontFamily, DEFAULT_CONFIG.fontFamily),
       fontWeight: pickString(raw?.fontWeight, DEFAULT_CONFIG.fontWeight),
-      shadowRadius: safeNumber(
-        raw?.shadowRadius,
-        DEFAULT_CONFIG.shadowRadius,
-        0,
-        50
-      ),
+      shadowRadius: clampNumber(raw?.shadowRadius, DEFAULT_CONFIG.shadowRadius),
       shadowColor: pickString(raw?.shadowColor, DEFAULT_CONFIG.shadowColor),
       codeFontFamily: pickString(
         raw?.codeFontFamily,
@@ -112,30 +107,31 @@
     const data = input;
     const pattern = typeof data.pattern === "string" ? data.pattern.trim() : "";
     if (!pattern) return null;
-    const normalized = { pattern };
-    const overrides = normalized;
-    const assign = (key, value) => {
-      if (value === void 0 || value === null) return;
-      if (key === "shadowRadius") {
-        const num = Number(value);
-        if (Number.isFinite(num))
-          overrides[key] = Math.min(Math.max(num, 0), 50);
-        return;
-      }
-      if (typeof value === "string" && value.trim().length > 0) {
-        overrides[key] = value.trim();
-      }
+    const overrides = {};
+    const pickString = (value) => {
+      const trimmed = typeof value === "string" ? value.trim() : "";
+      return trimmed.length > 0 ? trimmed : void 0;
     };
-    assign("fontFamily", data.fontFamily);
-    assign("fontWeight", data.fontWeight);
-    assign("shadowColor", data.shadowColor);
-    assign("shadowRadius", data.shadowRadius);
-    assign("codeFontFamily", data.codeFontFamily);
-    assign("codeFontWeight", data.codeFontWeight);
+    const fontFamily = pickString(data.fontFamily);
+    if (fontFamily) overrides.fontFamily = fontFamily;
+    const fontWeight = pickString(data.fontWeight);
+    if (fontWeight) overrides.fontWeight = fontWeight;
+    const shadowColor = pickString(data.shadowColor);
+    if (shadowColor) overrides.shadowColor = shadowColor;
+    const codeFontFamily = pickString(data.codeFontFamily);
+    if (codeFontFamily) overrides.codeFontFamily = codeFontFamily;
+    const codeFontWeight = pickString(data.codeFontWeight);
+    if (codeFontWeight) overrides.codeFontWeight = codeFontWeight;
+    if (data.shadowRadius !== void 0 && data.shadowRadius !== null) {
+      const num = Number(data.shadowRadius);
+      if (Number.isFinite(num)) {
+        overrides.shadowRadius = Math.min(Math.max(num, 0), 50);
+      }
+    }
     if (data.codeSelectors !== void 0 && data.codeSelectors !== null) {
       overrides.codeSelectors = normalizeCodeSelectors(data.codeSelectors);
     }
-    return normalized;
+    return { pattern, ...overrides };
   }
   function normalizeSettings(input) {
     if (!input) return createDefaultSettings();
@@ -157,25 +153,24 @@
   }
   function mergeFontConfig(base, override) {
     if (!override) return { ...base };
-    const next = { ...base };
-    const assign = (key) => {
-      const value = override[key];
-      if (value === void 0 || value === null) return;
-      next[key] = value;
+    const clampNumber = (value, fallback) => {
+      const num = typeof value === "number" ? value : Number(value);
+      if (!Number.isFinite(num)) return fallback;
+      return Math.min(Math.max(num, 0), 50);
     };
-    assign("fontFamily");
-    assign("fontWeight");
-    assign("shadowColor");
-    assign("codeFontFamily");
-    assign("codeFontWeight");
-    if (override.codeSelectors !== void 0 && override.codeSelectors !== null) {
+    const next = { ...base };
+    if (override.fontFamily != null) next.fontFamily = override.fontFamily;
+    if (override.fontWeight != null) next.fontWeight = override.fontWeight;
+    if (override.shadowColor != null) next.shadowColor = override.shadowColor;
+    if (override.codeFontFamily != null)
+      next.codeFontFamily = override.codeFontFamily;
+    if (override.codeFontWeight != null)
+      next.codeFontWeight = override.codeFontWeight;
+    if (override.codeSelectors != null) {
       next.codeSelectors = normalizeCodeSelectors(override.codeSelectors);
     }
-    if (override.shadowRadius !== void 0 && override.shadowRadius !== null) {
-      const num = Number(override.shadowRadius);
-      if (Number.isFinite(num)) {
-        next.shadowRadius = Math.min(Math.max(num, 0), 50);
-      }
+    if (override.shadowRadius != null) {
+      next.shadowRadius = clampNumber(override.shadowRadius, next.shadowRadius);
     }
     return next;
   }
@@ -198,20 +193,22 @@
       return false;
     }
   }
+  function expandCodeSelectors(selectors) {
+    const result = /* @__PURE__ */ new Set();
+    for (const selector of selectors) {
+      const trimmed = selector.trim();
+      if (!trimmed) continue;
+      result.add(trimmed);
+      if (!trimmed.includes("*")) {
+        result.add(`${trimmed} *`);
+      }
+    }
+    return Array.from(result);
+  }
   function buildCss(cfg) {
     const shadow = cfg.shadowRadius <= 0 ? "" : `text-shadow: 1px 1px ${cfg.shadowRadius}px ${cfg.shadowColor} !important;`;
     const rawCodeSelectors = cfg.codeSelectors && cfg.codeSelectors.length > 0 ? cfg.codeSelectors : DEFAULT_CONFIG.codeSelectors;
-    const expandedCodeSelectors = Array.from(
-      rawCodeSelectors.reduce((acc, selector) => {
-        const sel = selector.trim();
-        if (!sel) return acc;
-        acc.add(sel);
-        if (!sel.includes("*")) {
-          acc.add(`${sel} *`);
-        }
-        return acc;
-      }, /* @__PURE__ */ new Set())
-    ).join(",\n");
+    const expandedCodeSelectors = expandCodeSelectors(rawCodeSelectors).join(",\n");
     const generalFontSelector = ":where(:not([class*='icon']):not(.fa):not(.fas):not(i))";
     return `
 ${generalFontSelector}{
@@ -410,6 +407,20 @@ ${expandedCodeSelectors}{
       root.remove();
       style.remove();
     };
+    function parseSiteRules(input) {
+      if (!input.trim()) return [];
+      try {
+        const parsed = JSON.parse(input);
+        if (!Array.isArray(parsed)) throw new Error("rules must be an array");
+        return parsed.map((item) => normalizeSiteRule(item)).filter((item) => item !== null);
+      } catch {
+        window.alert("站点优先配置 JSON 无法解析，请检查格式。");
+        return null;
+      }
+    }
+    function parseWhitelist(input) {
+      return input.split(/\n+/).map((line) => line.trim()).filter((line) => line.length > 0);
+    }
     root.addEventListener("click", (e) => {
       const target = e.target;
       const act = target.getAttribute("data-act");
@@ -419,19 +430,9 @@ ${expandedCodeSelectors}{
         return;
       }
       if (act === "save") {
-        let parsedRules = [];
-        const rulesInput = taSiteRules.value.trim();
-        if (rulesInput) {
-          try {
-            const parsed = JSON.parse(rulesInput);
-            if (!Array.isArray(parsed)) throw new Error("rules must be an array");
-            parsedRules = parsed.map((item) => normalizeSiteRule(item)).filter((item) => Boolean(item));
-          } catch (error) {
-            window.alert("站点优先配置 JSON 无法解析，请检查格式。");
-            return;
-          }
-        }
-        const whitelistList = taWhitelist.value.split(/\n+/).map((line) => line.trim()).filter((line) => line.length > 0);
+        const parsedRules = parseSiteRules(taSiteRules.value);
+        if (parsedRules === null) return;
+        const whitelistList = parseWhitelist(taWhitelist.value);
         const next = {
           global: {
             fontFamily: ipFont.value.trim() || DEFAULT_CONFIG.fontFamily,
