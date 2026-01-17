@@ -38,6 +38,9 @@ type DebugContext = {
 
 const STORAGE_KEY = "better_font_state_v2";
 
+const EMOJI_FALLBACK_FONTS =
+  "'Apple Color Emoji','Segoe UI Emoji','Segoe UI Symbol','Noto Color Emoji'";
+
 const DEFAULT_CONFIG: FontConfig = {
   fontFamily:
     "'PingFang SC','Heiti SC','Microsoft YaHei','Source Han Sans SC','Noto Sans CJK SC','sans-serif'",
@@ -109,7 +112,7 @@ function createDefaultSettings(): StoredSettings {
 }
 
 function normalizeFontConfig(
-  raw: Partial<FontConfig> | null | undefined
+  raw: Partial<FontConfig> | null | undefined,
 ): FontConfig {
   const pickString = (value: unknown, fallback: string): string =>
     typeof value === "string" && value.trim().length > 0
@@ -129,11 +132,11 @@ function normalizeFontConfig(
     shadowColor: pickString(raw?.shadowColor, DEFAULT_CONFIG.shadowColor),
     codeFontFamily: pickString(
       raw?.codeFontFamily,
-      DEFAULT_CONFIG.codeFontFamily
+      DEFAULT_CONFIG.codeFontFamily,
     ),
     codeFontWeight: pickString(
       raw?.codeFontWeight,
-      DEFAULT_CONFIG.codeFontWeight
+      DEFAULT_CONFIG.codeFontWeight,
     ),
     codeSelectors: normalizeCodeSelectors(raw?.codeSelectors),
   };
@@ -211,7 +214,7 @@ function saveSettings(settings: StoredSettings): void {
 
 function mergeFontConfig(
   base: FontConfig,
-  override?: Partial<FontConfig>
+  override?: Partial<FontConfig>,
 ): FontConfig {
   if (!override) return { ...base };
 
@@ -277,11 +280,27 @@ function expandCodeSelectors(selectors: string[]): string[] {
   return Array.from(result);
 }
 
+function appendEmojiFallback(fontFamily: string): string {
+  const lower = fontFamily.toLowerCase();
+  if (
+    lower.includes("emoji") ||
+    lower.includes("segoe ui symbol") ||
+    lower.includes("apple color emoji") ||
+    lower.includes("noto color emoji")
+  ) {
+    return fontFamily;
+  }
+  return `${fontFamily},${EMOJI_FALLBACK_FONTS}`;
+}
+
 function buildCss(cfg: FontConfig): string {
   const shadow =
     cfg.shadowRadius <= 0
       ? ""
       : `text-shadow: 1px 1px ${cfg.shadowRadius}px ${cfg.shadowColor} !important;`;
+
+  const globalFontFamily = appendEmojiFallback(cfg.fontFamily);
+  const codeFontFamily = appendEmojiFallback(cfg.codeFontFamily);
 
   const rawCodeSelectors =
     cfg.codeSelectors && cfg.codeSelectors.length > 0
@@ -291,14 +310,14 @@ function buildCss(cfg: FontConfig): string {
   const expandedCodeSelectors =
     expandCodeSelectors(rawCodeSelectors).join(",\n");
   const generalFontSelector =
-    ":where(:not([class*='icon']):not(.fa):not(.fas):not(i))";
+    ":where(:not([class*='icon']):not(.fa):not(.fas):not(i):not(.material-symbols):not(.material-icons):not([class*='material-symbols']):not([class*='material-icons']))";
 
   return `
 ${generalFontSelector}{
-  font-family:${cfg.fontFamily} !important;
+  font-family:${globalFontFamily} !important;
 }
 ${expandedCodeSelectors}{
-  font-family:${cfg.codeFontFamily} !important;
+  font-family:${codeFontFamily} !important;
   font-weight:${cfg.codeFontWeight} !important;
 }
 :where(*) {
@@ -369,11 +388,11 @@ type DeriveResult = {
 
 function deriveStyles(settings: StoredSettings, url: string): DeriveResult {
   const whitelistEntry = settings.whitelist.find((pattern) =>
-    matchPattern(url, pattern)
+    matchPattern(url, pattern),
   );
   const whitelistHit = Boolean(whitelistEntry);
   const matchedRule = settings.siteRules.find((rule) =>
-    matchPattern(url, rule.pattern)
+    matchPattern(url, rule.pattern),
   );
 
   const ctx: DebugContext = {
@@ -402,10 +421,10 @@ function deriveStyles(settings: StoredSettings, url: string): DeriveResult {
 
 function mountSettingsUi(
   getState: () => StoredSettings,
-  setState: (payload: StoredSettings) => void
+  setState: (payload: StoredSettings) => void,
 ): void {
   const existing = document.querySelector<HTMLDivElement>(
-    "#better-font-settings"
+    "#better-font-settings",
   );
   if (existing) return;
 
@@ -619,7 +638,7 @@ function mountSettingsUi(
         settingsRef.current = next;
         saveSettings(next);
         apply();
-      }
+      },
     );
   });
 })();

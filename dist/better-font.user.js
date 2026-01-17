@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Better Font Renderer
 // @namespace    https://github.com/ShinoharaHaruna/better-font
-// @version      0.2.2
+// @version      0.3.0
 // @description  Force consistent fonts & code styling with per-site overrides
 // @author       Shinohara Haruna
 // @match        *://*/*
@@ -18,6 +18,7 @@
     return;
   };
   const STORAGE_KEY = "better_font_state_v2";
+  const EMOJI_FALLBACK_FONTS = "'Apple Color Emoji','Segoe UI Emoji','Segoe UI Symbol','Noto Color Emoji'";
   const DEFAULT_CONFIG = {
     fontFamily: "'PingFang SC','Heiti SC','Microsoft YaHei','Source Han Sans SC','Noto Sans CJK SC','sans-serif'",
     fontWeight: "bold",
@@ -205,17 +206,26 @@
     }
     return Array.from(result);
   }
+  function appendEmojiFallback(fontFamily) {
+    const lower = fontFamily.toLowerCase();
+    if (lower.includes("emoji") || lower.includes("segoe ui symbol") || lower.includes("apple color emoji") || lower.includes("noto color emoji")) {
+      return fontFamily;
+    }
+    return `${fontFamily},${EMOJI_FALLBACK_FONTS}`;
+  }
   function buildCss(cfg) {
     const shadow = cfg.shadowRadius <= 0 ? "" : `text-shadow: 1px 1px ${cfg.shadowRadius}px ${cfg.shadowColor} !important;`;
+    const globalFontFamily = appendEmojiFallback(cfg.fontFamily);
+    const codeFontFamily = appendEmojiFallback(cfg.codeFontFamily);
     const rawCodeSelectors = cfg.codeSelectors && cfg.codeSelectors.length > 0 ? cfg.codeSelectors : DEFAULT_CONFIG.codeSelectors;
     const expandedCodeSelectors = expandCodeSelectors(rawCodeSelectors).join(",\n");
-    const generalFontSelector = ":where(:not([class*='icon']):not(.fa):not(.fas):not(i))";
+    const generalFontSelector = ":where(:not([class*='icon']):not(.fa):not(.fas):not(i):not(.material-symbols):not(.material-icons):not([class*='material-symbols']):not([class*='material-icons']))";
     return `
 ${generalFontSelector}{
-  font-family:${cfg.fontFamily} !important;
+  font-family:${globalFontFamily} !important;
 }
 ${expandedCodeSelectors}{
-  font-family:${cfg.codeFontFamily} !important;
+  font-family:${codeFontFamily} !important;
   font-weight:${cfg.codeFontWeight} !important;
 }
 :where(*) {
