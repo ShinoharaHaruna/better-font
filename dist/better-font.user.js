@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Better Font Renderer
 // @namespace    https://github.com/ShinoharaHaruna/better-font
-// @version      0.3.0
+// @version      0.4.0
 // @description  Force consistent fonts & code styling with per-site overrides
 // @author       Shinohara Haruna
 // @match        *://*/*
@@ -18,7 +18,7 @@
     return;
   };
   const STORAGE_KEY = "better_font_state_v2";
-  const EMOJI_FALLBACK_FONTS = "'Apple Color Emoji','Segoe UI Emoji','Segoe UI Symbol','Noto Color Emoji'";
+  const EMOJI_FALLBACK_FONTS = "'Apple Color Emoji','Noto Color Emoji','Segoe UI Emoji','Segoe UI Symbol'";
   const DEFAULT_CONFIG = {
     fontFamily: "'PingFang SC','Heiti SC','Microsoft YaHei','Source Han Sans SC','Noto Sans CJK SC','sans-serif'",
     fontWeight: "bold",

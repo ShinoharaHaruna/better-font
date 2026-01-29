@@ -39,7 +39,7 @@ type DebugContext = {
 const STORAGE_KEY = "better_font_state_v2";
 
 const EMOJI_FALLBACK_FONTS =
-  "'Apple Color Emoji','Segoe UI Emoji','Segoe UI Symbol','Noto Color Emoji'";
+  "'Apple Color Emoji','Noto Color Emoji','Segoe UI Emoji','Segoe UI Symbol'";
 
 const DEFAULT_CONFIG: FontConfig = {
   fontFamily:

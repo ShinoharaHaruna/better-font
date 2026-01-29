@@ -6,7 +6,7 @@ const userscriptBanner =
   `// ==UserScript==\n` +
   `// @name         Better Font Renderer\n` +
   `// @namespace    https://github.com/ShinoharaHaruna/better-font\n` +
-  `// @version      0.3.0\n` +
+  `// @version      0.4.0\n` +
   `// @description  Force consistent fonts & code styling with per-site overrides\n` +
   `// @author       Shinohara Haruna\n` +
   `// @match        *://*/*\n` +
