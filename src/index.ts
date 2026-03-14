@@ -316,12 +316,14 @@ function buildCss(cfg: FontConfig): string {
 ${generalFontSelector}{
   font-family:${globalFontFamily} !important;
 }
+html,body{
+  font-weight:${cfg.fontWeight};
+}
 ${expandedCodeSelectors}{
   font-family:${codeFontFamily} !important;
   font-weight:${cfg.codeFontWeight} !important;
 }
 :where(*) {
-  font-weight:${cfg.fontWeight} !important;
   ${shadow}
 }
 `;
