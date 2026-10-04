@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Better Font Renderer
 // @namespace    https://github.com/ShinoharaHaruna/better-font
-// @version      0.4.1
+// @version      0.5.0
 // @description  Force consistent fonts & code styling with per-site overrides
 // @author       Shinohara Haruna
 // @match        *://*/*
@@ -87,6 +87,9 @@
     "[class*='uil-']",
     // Unicons
     "[class*='entypo']",
+    // Attribute-marked icon systems
+    "[data-cds='Icon']",
+    // Claude (claude.ai) design system PUA icons
     // UI framework icon classes
     ".anticon",
     // Ant Design

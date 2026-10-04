@@ -118,6 +118,9 @@ const ICON_FONT_EXCLUSIONS: readonly string[] = [
   "[class*='uil-']", // Unicons
   "[class*='entypo']",
 
+  // Attribute-marked icon systems
+  "[data-cds='Icon']", // Claude (claude.ai) design system PUA icons
+
   // UI framework icon classes
   ".anticon", // Ant Design
   "[class*='el-icon']", // Element UI / Element Plus
