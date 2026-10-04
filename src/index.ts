@@ -41,6 +41,92 @@ const STORAGE_KEY = "better_font_state_v2";
 const EMOJI_FALLBACK_FONTS =
   "'Apple Color Emoji','Noto Color Emoji','Segoe UI Emoji','Segoe UI Symbol'";
 
+/**
+ * Icon-font markers excluded from the global font-family override.
+ * Each entry is a plain CSS selector; the rule generator wraps all of them in
+ * a single :not(...) list, so an element matching ANY entry keeps its
+ * original font (required for ligature/glyph icon fonts).
+ *
+ * When a site's icons render as raw text (e.g. the literal word "translate"),
+ * find the icon element's class and add the matching entry here.
+ */
+const ICON_FONT_EXCLUSIONS: readonly string[] = [
+  // Generic markers
+  "i", // classic <i> icon element (also skips italic text)
+  "[class*='icon']",
+
+  // Font Awesome
+  ".fa",
+  ".fas",
+  ".far",
+  ".fab",
+  ".fal",
+  ".fad",
+  ".fat",
+  ".fass",
+  "[class*='fa-']",
+
+  // Google Material Symbols / Material Icons (singular and plural,
+  // e.g. .material-symbol, .material-symbols-outlined, .material-icons)
+  "[class*='material-symbol']",
+  "[class*='material-icon']",
+
+  // Material Design Icons / Material Design Iconic Font
+  ".mdi",
+  "[class*='mdi-']",
+  ".zmdi",
+  "[class*='zmdi-']",
+
+  // Bootstrap 3 Glyphicons, Bootstrap Icons
+  ".glyphicon",
+  "[class*='glyphicon-']",
+  ".bi",
+  "[class*='bi-']",
+
+  // iconfont.cn (Alibaba)
+  ".iconfont",
+
+  // GitHub Octicons
+  ".octicon",
+  "[class*='octicon-']",
+
+  // Ionicons
+  "ion-icon",
+  ".ionicons",
+
+  // WordPress Dashicons
+  ".dashicons",
+  "[class*='dashicons-']",
+
+  // Elementor icons
+  ".eicon",
+  "[class*='eicon-']",
+
+  // Smaller icon fonts: exact base classes only (two-letter substring
+  // matches like 'ti-'/'pi-' would catch ordinary classes such as 'multi-')
+  ".ti", // Themify
+  ".wi", // Weather Icons
+  ".la", // Line Awesome
+  ".ai", // Academicons
+  ".pi", // PrimeIcons
+  ".oi", // Open Iconic
+  ".fi", // Foundation Icons
+  ".pe-7s", // Stroke 7
+  ".icofont",
+  ".devicon",
+  ".typcn", // Typicons
+  "[class*='uil-']", // Unicons
+  "[class*='entypo']",
+
+  // UI framework icon classes
+  ".anticon", // Ant Design
+  "[class*='el-icon']", // Element UI / Element Plus
+  ".ivu-icon", // iView / View UI
+  ".v-icon", // Vuetify
+  ".q-icon", // Quasar
+  ".weui-icon", // WeUI
+];
+
 const DEFAULT_CONFIG: FontConfig = {
   fontFamily:
     "'PingFang SC','Heiti SC','Microsoft YaHei','Source Han Sans SC','Noto Sans CJK SC','sans-serif'",
@@ -309,8 +395,7 @@ function buildCss(cfg: FontConfig): string {
 
   const expandedCodeSelectors =
     expandCodeSelectors(rawCodeSelectors).join(",\n");
-  const generalFontSelector =
-    ":where(:not([class*='icon']):not(.fa):not(.fas):not(i):not(.material-symbols):not(.material-icons):not([class*='material-symbols']):not([class*='material-icons']))";
+  const generalFontSelector = `:where(:not(${ICON_FONT_EXCLUSIONS.join(",")}))`;
 
   return `
 ${generalFontSelector}{
@@ -330,11 +415,6 @@ ${expandedCodeSelectors}{
 }
 
 let injectedStyle: Maybe<HTMLStyleElement>;
-
-function withHead(cb: () => void): void {
-  if (document.head) cb();
-  else document.addEventListener("DOMContentLoaded", cb, { once: true });
-}
 
 function ensureStyleAttached(cssText: string | null): void {
   if (!cssText) {

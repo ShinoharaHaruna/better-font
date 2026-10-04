@@ -19,6 +19,88 @@
   };
   const STORAGE_KEY = "better_font_state_v2";
   const EMOJI_FALLBACK_FONTS = "'Apple Color Emoji','Noto Color Emoji','Segoe UI Emoji','Segoe UI Symbol'";
+  const ICON_FONT_EXCLUSIONS = [
+    // Generic markers
+    "i",
+    // classic <i> icon element (also skips italic text)
+    "[class*='icon']",
+    // Font Awesome
+    ".fa",
+    ".fas",
+    ".far",
+    ".fab",
+    ".fal",
+    ".fad",
+    ".fat",
+    ".fass",
+    "[class*='fa-']",
+    // Google Material Symbols / Material Icons (singular and plural,
+    // e.g. .material-symbol, .material-symbols-outlined, .material-icons)
+    "[class*='material-symbol']",
+    "[class*='material-icon']",
+    // Material Design Icons / Material Design Iconic Font
+    ".mdi",
+    "[class*='mdi-']",
+    ".zmdi",
+    "[class*='zmdi-']",
+    // Bootstrap 3 Glyphicons, Bootstrap Icons
+    ".glyphicon",
+    "[class*='glyphicon-']",
+    ".bi",
+    "[class*='bi-']",
+    // iconfont.cn (Alibaba)
+    ".iconfont",
+    // GitHub Octicons
+    ".octicon",
+    "[class*='octicon-']",
+    // Ionicons
+    "ion-icon",
+    ".ionicons",
+    // WordPress Dashicons
+    ".dashicons",
+    "[class*='dashicons-']",
+    // Elementor icons
+    ".eicon",
+    "[class*='eicon-']",
+    // Smaller icon fonts: exact base classes only (two-letter substring
+    // matches like 'ti-'/'pi-' would catch ordinary classes such as 'multi-')
+    ".ti",
+    // Themify
+    ".wi",
+    // Weather Icons
+    ".la",
+    // Line Awesome
+    ".ai",
+    // Academicons
+    ".pi",
+    // PrimeIcons
+    ".oi",
+    // Open Iconic
+    ".fi",
+    // Foundation Icons
+    ".pe-7s",
+    // Stroke 7
+    ".icofont",
+    ".devicon",
+    ".typcn",
+    // Typicons
+    "[class*='uil-']",
+    // Unicons
+    "[class*='entypo']",
+    // UI framework icon classes
+    ".anticon",
+    // Ant Design
+    "[class*='el-icon']",
+    // Element UI / Element Plus
+    ".ivu-icon",
+    // iView / View UI
+    ".v-icon",
+    // Vuetify
+    ".q-icon",
+    // Quasar
+    ".weui-icon"
+    // WeUI
+  ];
   const DEFAULT_CONFIG = {
     fontFamily: "'PingFang SC','Heiti SC','Microsoft YaHei','Source Han Sans SC','Noto Sans CJK SC','sans-serif'",
     fontWeight: "bold",
@@ -219,7 +301,7 @@
     const codeFontFamily = appendEmojiFallback(cfg.codeFontFamily);
     const rawCodeSelectors = cfg.codeSelectors && cfg.codeSelectors.length > 0 ? cfg.codeSelectors : DEFAULT_CONFIG.codeSelectors;
     const expandedCodeSelectors = expandCodeSelectors(rawCodeSelectors).join(",\n");
-    const generalFontSelector = ":where(:not([class*='icon']):not(.fa):not(.fas):not(i):not(.material-symbols):not(.material-icons):not([class*='material-symbols']):not([class*='material-icons']))";
+    const generalFontSelector = `:where(:not(${ICON_FONT_EXCLUSIONS.join(",")}))`;
     return `
 ${generalFontSelector}{
   font-family:${globalFontFamily} !important;
