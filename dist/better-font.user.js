@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Better Font Renderer
 // @namespace    https://github.com/ShinoharaHaruna/better-font
-// @version      0.5.0
+// @version      0.5.1
 // @description  Force consistent fonts & code styling with per-site overrides
 // @author       Shinohara Haruna
 // @match        *://*/*
