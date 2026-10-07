@@ -71,6 +71,10 @@ const ICON_FONT_EXCLUSIONS: readonly string[] = [
   "[class*='material-symbol']",
   "[class*='material-icon']",
 
+  // Google 1P icon font ("Google Symbols") used in the avatar menu and
+  // One Google bar; the class name contains neither "material" nor "icon"
+  "[class*='google-symbols']",
+
   // Material Design Icons / Material Design Iconic Font
   ".mdi",
   "[class*='mdi-']",
