@@ -2,6 +2,7 @@
 // @name         Better Font Renderer
 // @namespace    https://github.com/ShinoharaHaruna/better-font
 // @version      0.6.0
+// @license      MIT
 // @description  Force consistent fonts & code styling with per-site overrides
 // @author       Shinohara Haruna
 // @match        *://*/*
