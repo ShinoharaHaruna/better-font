@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Better Font Renderer
 // @namespace    https://github.com/ShinoharaHaruna/better-font
-// @version      0.5.1
+// @version      0.6.0
 // @description  Force consistent fonts & code styling with per-site overrides
 // @author       Shinohara Haruna
 // @match        *://*/*
@@ -14,6 +14,88 @@
 
 (function() {
   "use strict";
+  const zh = {
+    title: "Better Font 设置",
+    language: "界面语言",
+    languageAuto: "自动（跟随浏览器）",
+    fontFamily: "全局 font-family",
+    fontFamilyHint: "示例: 'PingFang SC','Microsoft YaHei',sans-serif",
+    fontWeight: "全局 font-weight",
+    shadowRadius: "text-shadow 半径",
+    shadowColor: "text-shadow 颜色",
+    codeFontFamily: "代码块 font-family",
+    codeFontFamilyPlaceholder: "'Fira Code','monospace'",
+    codeFontWeight: "代码块 font-weight",
+    whitelist: "白名单（每行一个通配符 URL，支持 * 与 ?）",
+    whitelistPlaceholder: "例如：*://*.example.com/*",
+    siteRules: "站点优先配置（JSON 数组，字段同上）",
+    siteRulesPlaceholder: '[{"pattern":"*://*.example.com/*","fontFamily":"..."}]',
+    siteRulesHint: `示例：[{ "pattern": "*://*.example.com/*", "fontFamily": "'PingFang SC'", "codeFontFamily": "'Fira Code',monospace" }]`,
+    siteRulesInvalid: "站点优先配置 JSON 无法解析，请检查格式。",
+    close: "关闭",
+    cancel: "取消",
+    save: "保存"
+  };
+  const en = {
+    title: "Better Font Settings",
+    language: "Language",
+    languageAuto: "Auto (follow browser)",
+    fontFamily: "Global font-family",
+    fontFamilyHint: "e.g. 'PingFang SC','Microsoft YaHei',sans-serif",
+    fontWeight: "Global font-weight",
+    shadowRadius: "text-shadow radius",
+    shadowColor: "text-shadow color",
+    codeFontFamily: "Code block font-family",
+    codeFontFamilyPlaceholder: "'Fira Code','monospace'",
+    codeFontWeight: "Code block font-weight",
+    whitelist: "Whitelist (one wildcard URL per line, * and ? supported)",
+    whitelistPlaceholder: "e.g. *://*.example.com/*",
+    siteRules: "Per-site overrides (JSON array, same fields as above)",
+    siteRulesPlaceholder: '[{"pattern":"*://*.example.com/*","fontFamily":"..."}]',
+    siteRulesHint: `e.g. [{ "pattern": "*://*.example.com/*", "fontFamily": "'PingFang SC'", "codeFontFamily": "'Fira Code',monospace" }]`,
+    siteRulesInvalid: "Could not parse the per-site rules JSON. Please check the format.",
+    close: "Close",
+    cancel: "Cancel",
+    save: "Save"
+  };
+  const ja = {
+    title: "Better Font 設定",
+    language: "表示言語",
+    languageAuto: "自動（ブラウザに従う）",
+    fontFamily: "グローバル font-family",
+    fontFamilyHint: "例: 'PingFang SC','Microsoft YaHei',sans-serif",
+    fontWeight: "グローバル font-weight",
+    shadowRadius: "text-shadow の半径",
+    shadowColor: "text-shadow の色",
+    codeFontFamily: "コードブロックの font-family",
+    codeFontFamilyPlaceholder: "'Fira Code','monospace'",
+    codeFontWeight: "コードブロックの font-weight",
+    whitelist: "ホワイトリスト（1行1つのワイルドカード URL、* と ? が使えます）",
+    whitelistPlaceholder: "例：*://*.example.com/*",
+    siteRules: "サイト別設定（JSON 配列、フィールドは上記と同じ）",
+    siteRulesPlaceholder: '[{"pattern":"*://*.example.com/*","fontFamily":"..."}]',
+    siteRulesHint: `例：[{ "pattern": "*://*.example.com/*", "fontFamily": "'PingFang SC'", "codeFontFamily": "'Fira Code',monospace" }]`,
+    siteRulesInvalid: "サイト別設定の JSON を解析できませんでした。形式を確認してください。",
+    close: "閉じる",
+    cancel: "キャンセル",
+    save: "保存"
+  };
+  const LOCALES = { zh, en, ja };
+  function resolveLocale(pref) {
+    if (pref === "zh" || pref === "en" || pref === "ja") return pref;
+    const navs = typeof navigator !== "undefined" && Array.isArray(navigator.languages) && navigator.languages.length > 0 ? navigator.languages : [typeof navigator !== "undefined" ? navigator.language : "en"];
+    for (const nav of navs) {
+      const lang = (nav ?? "").toLowerCase();
+      if (lang.startsWith("zh")) return "zh";
+      if (lang.startsWith("ja")) return "ja";
+      if (lang.startsWith("en")) return "en";
+    }
+    return "en";
+  }
+  function createTranslator(pref) {
+    const messages = LOCALES[resolveLocale(pref)];
+    return (key) => messages[key] ?? en[key] ?? key;
+  }
   const debugLog = (...args) => {
     return;
   };
@@ -165,7 +247,8 @@
     return {
       global: { ...DEFAULT_CONFIG },
       siteRules: [],
-      whitelist: []
+      whitelist: [],
+      language: "auto"
     };
   }
   function normalizeFontConfig(raw) {
@@ -229,8 +312,12 @@
     return {
       global: normalizeFontConfig(input.global),
       siteRules: normalizedRules,
-      whitelist
+      whitelist,
+      language: normalizeLanguagePref(input.language)
     };
+  }
+  function normalizeLanguagePref(value) {
+    return value === "auto" || value === "zh" || value === "en" || value === "ja" ? value : "auto";
   }
   function loadSettings() {
     const stored = GM_getValue(STORAGE_KEY, null);
@@ -390,12 +477,31 @@ ${expandedCodeSelectors}{
     });
     return { cssText: css, effectiveConfig };
   }
+  const FONT_WEIGHT_OPTIONS = ["normal", "400", "500", "600", "bold"];
+  function el(tag, options = {}) {
+    const node = document.createElement(tag);
+    if (options.className) node.className = options.className;
+    if (options.text !== void 0) node.textContent = options.text;
+    if (options.attrs) {
+      for (const [name, value] of Object.entries(options.attrs)) {
+        node.setAttribute(name, value);
+      }
+    }
+    if (options.children) node.append(...options.children);
+    return node;
+  }
+  function weightOptionElements() {
+    return FONT_WEIGHT_OPTIONS.map(
+      (value) => el("option", { text: value, attrs: { value } })
+    );
+  }
   function mountSettingsUi(getState, setState) {
     const existing = document.querySelector(
       "#better-font-settings"
     );
     if (existing) return;
     const state = getState();
+    const t = createTranslator(state.language);
     const css = `
 #better-font-settings{position:fixed;z-index:2147483647;right:24px;top:16px;width:360px;max-height:90vh;overflow:auto;background:#fff;border-radius:12px;box-shadow:0 6px 28px rgba(0,0,0,.25);font:14px/1.4 -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#111}
 #better-font-settings *{box-sizing:border-box}
@@ -415,73 +521,163 @@ ${expandedCodeSelectors}{
     const style = GM_addStyle(css);
     const root = document.createElement("div");
     root.id = "better-font-settings";
-    root.innerHTML = `
-    <div class="hdr">
-      <div class="ttl">Better Font 设置</div>
-      <button class="btn" data-act="close">关闭</button>
-    </div>
-    <div class="bd">
-      <label>
-        <div>全局 font-family</div>
-        <input type="text" data-k="fontFamily" />
-        <div class="hint">示例: 'PingFang SC','Microsoft YaHei',sans-serif</div>
-      </label>
-      <label>
-        <div>全局 font-weight</div>
-        <select data-k="fontWeight">
-          <option value="normal">normal</option>
-          <option value="400">400</option>
-          <option value="500">500</option>
-          <option value="600">600</option>
-          <option value="bold">bold</option>
-        </select>
-      </label>
-      <label>
-        <div class="row">
-          <div class="grow">text-shadow 半径</div>
-          <div><span data-k="shadowRadiusLabel"></span>px</div>
-        </div>
-        <input type="range" min="0" max="20" step="1" data-k="shadowRadius" />
-      </label>
-      <label>
-        <div>text-shadow 颜色</div>
-        <input type="text" data-k="shadowColor" placeholder="#c3c3c3" />
-      </label>
-      <label>
-        <div>代码块 font-family</div>
-        <input type="text" data-k="codeFontFamily" placeholder="'Fira Code','monospace'" />
-      </label>
-      <label>
-        <div>代码块 font-weight</div>
-        <select data-k="codeFontWeight">
-          <option value="normal">normal</option>
-          <option value="400">400</option>
-          <option value="500">500</option>
-          <option value="600">600</option>
-          <option value="bold">bold</option>
-        </select>
-      </label>
-      <label>
-        <div>白名单（每行一个通配符 URL，支持 * 与 ?）</div>
-        <textarea data-k="whitelist" rows="3" placeholder="例如：*://*.example.com/*"></textarea>
-      </label>
-      <label>
-        <div>站点优先配置（JSON 数组，字段同上）</div>
-        <textarea data-k="siteRules" rows="6" placeholder='[{"pattern":"*://*.example.com/*","fontFamily":"..."}]'></textarea>
-        <div class="hint">示例：[{ "pattern": "*://*.example.com/*", "fontFamily": "'PingFang SC'", "codeFontFamily": "'Fira Code',monospace" }]</div>
-      </label>
-      <div class="row" style="justify-content:flex-end">
-        <button class="btn" data-act="cancel">取消</button>
-        <button class="btn primary" data-act="save">保存</button>
-      </div>
-    </div>
-  `;
+    root.append(
+      el("div", {
+        className: "hdr",
+        children: [
+          el("div", { className: "ttl", text: t("title") }),
+          el("button", {
+            className: "btn",
+            text: t("close"),
+            attrs: { "data-act": "close" }
+          })
+        ]
+      }),
+      el("div", {
+        className: "bd",
+        children: [
+          el("label", {
+            children: [
+              el("div", { text: t("language") }),
+              el("select", {
+                attrs: { "data-k": "language" },
+                children: [
+                  el("option", {
+                    text: t("languageAuto"),
+                    attrs: { value: "auto" }
+                  }),
+                  el("option", { text: "中文", attrs: { value: "zh" } }),
+                  el("option", { text: "English", attrs: { value: "en" } }),
+                  el("option", { text: "日本語", attrs: { value: "ja" } })
+                ]
+              })
+            ]
+          }),
+          el("label", {
+            children: [
+              el("div", { text: t("fontFamily") }),
+              el("input", { attrs: { type: "text", "data-k": "fontFamily" } }),
+              el("div", { className: "hint", text: t("fontFamilyHint") })
+            ]
+          }),
+          el("label", {
+            children: [
+              el("div", { text: t("fontWeight") }),
+              el("select", {
+                attrs: { "data-k": "fontWeight" },
+                children: weightOptionElements()
+              })
+            ]
+          }),
+          el("label", {
+            children: [
+              el("div", {
+                className: "row",
+                children: [
+                  el("div", { className: "grow", text: t("shadowRadius") }),
+                  el("div", {
+                    children: [
+                      el("span", { attrs: { "data-k": "shadowRadiusLabel" } }),
+                      "px"
+                    ]
+                  })
+                ]
+              }),
+              el("input", {
+                attrs: {
+                  type: "range",
+                  min: "0",
+                  max: "20",
+                  step: "1",
+                  "data-k": "shadowRadius"
+                }
+              })
+            ]
+          }),
+          el("label", {
+            children: [
+              el("div", { text: t("shadowColor") }),
+              el("input", {
+                attrs: {
+                  type: "text",
+                  "data-k": "shadowColor",
+                  placeholder: "#c3c3c3"
+                }
+              })
+            ]
+          }),
+          el("label", {
+            children: [
+              el("div", { text: t("codeFontFamily") }),
+              el("input", {
+                attrs: {
+                  type: "text",
+                  "data-k": "codeFontFamily",
+                  placeholder: t("codeFontFamilyPlaceholder")
+                }
+              })
+            ]
+          }),
+          el("label", {
+            children: [
+              el("div", { text: t("codeFontWeight") }),
+              el("select", {
+                attrs: { "data-k": "codeFontWeight" },
+                children: weightOptionElements()
+              })
+            ]
+          }),
+          el("label", {
+            children: [
+              el("div", { text: t("whitelist") }),
+              el("textarea", {
+                attrs: {
+                  "data-k": "whitelist",
+                  rows: "3",
+                  placeholder: t("whitelistPlaceholder")
+                }
+              })
+            ]
+          }),
+          el("label", {
+            children: [
+              el("div", { text: t("siteRules") }),
+              el("textarea", {
+                attrs: {
+                  "data-k": "siteRules",
+                  rows: "6",
+                  placeholder: t("siteRulesPlaceholder")
+                }
+              }),
+              el("div", { className: "hint", text: t("siteRulesHint") })
+            ]
+          }),
+          el("div", {
+            className: "row",
+            attrs: { style: "justify-content:flex-end" },
+            children: [
+              el("button", {
+                className: "btn",
+                text: t("cancel"),
+                attrs: { "data-act": "cancel" }
+              }),
+              el("button", {
+                className: "btn primary",
+                text: t("save"),
+                attrs: { "data-act": "save" }
+              })
+            ]
+          })
+        ]
+      })
+    );
     const q = (sel) => {
-      const el = root.querySelector(sel);
-      if (!el) throw new Error(`Element not found: ${sel}`);
-      return el;
+      const el2 = root.querySelector(sel);
+      if (!el2) throw new Error(`Element not found: ${sel}`);
+      return el2;
     };
     const { global, whitelist, siteRules } = state;
+    const selLang = q('select[data-k="language"]');
     const ipFont = q('input[data-k="fontFamily"]');
     const selWeight = q('select[data-k="fontWeight"]');
     const rgShadow = q('input[data-k="shadowRadius"]');
@@ -491,6 +687,7 @@ ${expandedCodeSelectors}{
     const selCodeWeight = q('select[data-k="codeFontWeight"]');
     const taWhitelist = q('textarea[data-k="whitelist"]');
     const taSiteRules = q('textarea[data-k="siteRules"]');
+    selLang.value = state.language;
     ipFont.value = global.fontFamily;
     selWeight.value = global.fontWeight;
     rgShadow.value = String(global.shadowRadius);
@@ -514,7 +711,7 @@ ${expandedCodeSelectors}{
         if (!Array.isArray(parsed)) throw new Error("rules must be an array");
         return parsed.map((item) => normalizeSiteRule(item)).filter((item) => item !== null);
       } catch {
-        window.alert("站点优先配置 JSON 无法解析，请检查格式。");
+        window.alert(t("siteRulesInvalid"));
         return null;
       }
     }
@@ -544,14 +741,15 @@ ${expandedCodeSelectors}{
             codeSelectors: [...state.global.codeSelectors]
           },
           whitelist: whitelistList,
-          siteRules: parsedRules
+          siteRules: parsedRules,
+          language: normalizeLanguagePref(selLang.value)
         };
         setState(normalizeSettings(next));
         close();
       }
     });
     const mount = () => {
-      document.body.appendChild(root);
+      document.body.append(root);
     };
     if (document.body) mount();
     else document.addEventListener("DOMContentLoaded", mount, { once: true });
@@ -567,7 +765,7 @@ ${expandedCodeSelectors}{
     };
     apply();
     keepStyleAlive(() => derive());
-    GM_registerMenuCommand("Better Font 设置", () => {
+    GM_registerMenuCommand(createTranslator(settingsRef.current.language)("title"), () => {
       mountSettingsUi(
         () => settingsRef.current,
         (next) => {
